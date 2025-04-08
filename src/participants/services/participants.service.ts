@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/global/redis.module';
 import { Participant } from 'src/participants/dto/participantDto';
@@ -11,6 +12,7 @@ export class ParticipantsService {
   constructor(
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
     private readonly otpService: OtpService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -35,7 +37,9 @@ export class ParticipantsService {
     data.createdAt = new Date();
     const otp = this.otpService.generateOtp();
     await this.redisClient.hset(this.tableKey, id, JSON.stringify(data));
-    await this.otpService.sendOtpViaEmail(data.email, otp);
+    const subject = 'Подтвердите почту';
+    const text = `Ваш код ${otp}`;
+    await this.otpService.sendOtpViaEmail(data.email, subject, text);
     await this.otpService.saveOtp(data.email, otp);
     return data;
   }
@@ -74,11 +78,28 @@ export class ParticipantsService {
 
   async verifyEmail(email: string, otp: string): Promise<boolean> {
     try {
-      await this.verifyEmail(email, otp);
-      return true;
+      const verified = await this.otpService.verifyOtp(email, otp);
+      if (verified) {
+        // 👇 Emit event asynchronously
+        this.eventEmitter.emit('participant.verified', { email });
+      }
+      return verified;
     } catch (err) {
-      console.log(err);
+      console.error('verifyEmail error:', err);
       return false;
+    }
+  }
+
+  @OnEvent('participant.verified', { async: true })
+  async handleVerifiedEvent(payload: { email: string }) {
+    const subject = 'Регистрация успешна';
+    const text = 'Поздравляем. Регистрация прошла успешно. Ждем вас 26 апреля';
+
+    try {
+      await this.otpService.sendOtpViaEmail(payload.email, subject, text);
+      console.log('Welcome email sent to:', payload.email);
+    } catch (error) {
+      console.error('Error sending welcome email:', error);
     }
   }
 }

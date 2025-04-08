@@ -65,13 +65,17 @@ export class OtpService {
    * @param email The recipient's email address
    * @param otp The OTP code to send
    */
-  async sendOtpViaEmail(email: string, otp: string): Promise<void> {
+  async sendOtpViaEmail(
+    email: string,
+    subject: string,
+    text: string,
+  ): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await this.emailTransporter.sendMail({
       from: this.configService.get<string>('SMTP_FROM'),
       to: email,
-      subject: 'Ваш OTP код',
-      text: `Ваш OTP код: ${otp}`,
+      subject: subject,
+      text: text,
     });
   }
 
@@ -94,12 +98,29 @@ export class OtpService {
    * @returns True if the OTP is correct; otherwise, false.
    */
   async verifyOtp(identifier: string, otp: string): Promise<boolean> {
-    const storedOtp = await this.redisClient.get(`otp:${identifier}`);
-    if (storedOtp === otp) {
-      // Optionally, delete the OTP after successful verification
-      await this.redisClient.del(`otp:${identifier}`);
+    try {
+      // Get the stored OTP from Redis
+      const storedOtp = await this.redisClient.get(`otp:${identifier}`);
+
+      if (!storedOtp) {
+        // OTP not found in Redis
+        return false;
+      }
+
+      if (storedOtp !== otp) {
+        // Provided OTP does not match the stored one
+        return false;
+      }
+
+      // Delete the OTP asynchronously (optional: avoid waiting for deletion)
+      this.redisClient.del(`otp:${identifier}`).catch((err) => {
+        console.error('Error deleting OTP from Redis:', err);
+      });
+
       return true;
+    } catch (error) {
+      console.error('verifyOtp error:', error);
+      return false;
     }
-    return false;
   }
 }

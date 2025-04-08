@@ -24,15 +24,28 @@ export class ParticipantsController {
     else throw InternalServerErrorException;
 
   }
-  @Get('/verify')
-  async sendEmail(@Body() body:emailOtpDto,@Res() res: Response){
-     const verify = await this.service.verifyEmail("holy.s.hit9137@gmail.com",body.otp);
-    if(verify){
-        return res.status(HttpStatus.OK);
+  @Post('/verify')
+  async sendEmail(
+    @Body() body: emailOtpDto, 
+    @Res() res: Response
+  ) {
+    try {
+      const verified = await this.service.verifyEmail(body.email, body.otp);
+  
+      if (verified) {
+        // Response is sent immediately upon verification
+        return res.status(HttpStatus.OK).json({ message: 'OTP verified successfully' });
+      } else {
+        // Use an appropriate status (e.g. Unauthorized, Bad Request)
+        return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Invalid OTP' });
+      }
+    } catch (error) {
+      console.error('Registration/Verification Error:', error);
+      // Respond with an internal server error status
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Internal server error' });
     }
-    throw new InternalServerErrorException;
-     
   }
+  
 
   @Get(':id')
   async getItem(@Param('id') id:string, @Res() res: Response){

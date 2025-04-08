@@ -6,5 +6,6 @@ export interface Participant {
   email: string;
   institution: string;
   isConfirmed: boolean;
+  selectedTime: Date;
   createdAt: Date;
 }
